@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NEAT Search</string>
+    <string name="search_hint">Tìm kiếm…</string>
+    <string name="search_with">Tìm trên %1$s</string>
+    <string name="go_to">Mở trang này</string>
+    <string name="coming_soon">Đang phát triển</string>
+    <string name="link_copied">Đã sao chép liên kết</string>
+    <string name="cd_tabs">Thẻ</string>
+    <string name="cd_new_tab">Thẻ mới</string>
+    <string name="cd_settings">Cài đặt</string>
+    <string name="cd_page_menu">Menu trang</string>
+    <string name="cd_back">Quay lại</string>
+    <string name="cd_forward">Tiến</string>
+    <string name="cd_copy_link">Sao chép liên kết</string>
+    <string name="cd_reload">Tải lại</string>
+    <string name="error_title">Không mở được trang này</string>
+    <string name="error_hint">Kiểm tra địa chỉ và kết nối mạng rồi thử lại.</string>
+</resources>
