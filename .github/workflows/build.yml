@@ -34,7 +34,8 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+          # AGP downloads whatever is still missing; these only save it a step, so a wrong name must not fail the job.
+          "$SDKMANAGER" "platforms;android-37.0" "build-tools;36.0.0" || echo "sdkmanager could not install them; AGP will"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
