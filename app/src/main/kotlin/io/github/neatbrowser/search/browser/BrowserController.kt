@@ -208,8 +208,8 @@ class BrowserController(private val context: Context) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{margin:0;padding:32px 24px;background:#0B1B2B;color:#E8EAED;font:16px/1.5 sans-serif}
 h1{font-size:22px;margin:48px 0 12px}p{color:#9AA0A6;word-break:break-all}</style></head>
-<body><h1>${esc(context.getString(R.string.error_title))}</h1>
-<p>${esc(context.getString(R.string.error_hint))}</p><p>${esc(uri.orEmpty())}</p></body></html>"""
+<body><h1>${esc(context.getString(R.string.page_error_title))}</h1>
+<p>${esc(context.getString(R.string.page_error_hint))}</p><p>${esc(uri.orEmpty())}</p></body></html>"""
         return ERROR_PAGE_PREFIX + Base64.encodeToString(html.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
     }
 

@@ -14,6 +14,6 @@
     <string name="cd_forward">Tiến</string>
     <string name="cd_copy_link">Sao chép liên kết</string>
     <string name="cd_reload">Tải lại</string>
-    <string name="error_title">Không mở được trang này</string>
-    <string name="error_hint">Kiểm tra địa chỉ và kết nối mạng rồi thử lại.</string>
+    <string name="page_error_title">Không mở được trang này</string>
+    <string name="page_error_hint">Kiểm tra địa chỉ và kết nối mạng rồi thử lại.</string>
 </resources>
