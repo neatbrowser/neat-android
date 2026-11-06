@@ -50,7 +50,7 @@ Safe Browsing) and whether it can be switched off.
 
 ## Build
 
-Android Studio (Ladybug or newer) opens the project as is. From a shell, with JDK 17 and the Android SDK:
+Android Studio Panda 3 (2025.3.3) or newer opens the project as is. From a shell, with JDK 17 and the Android SDK:
 
 ```sh
 ./gradlew :core:test            # logic tests, no Android needed
@@ -58,7 +58,8 @@ Android Studio (Ladybug or newer) opens the project as is. From a shell, with JD
 ```
 
 GeckoView comes from `https://maven.mozilla.org/maven2/` (release channel, `org.mozilla.geckoview:geckoview`).
-The version defaults to the newest; pin one with `-PgeckoviewVersion=<version>` or in `gradle.properties`.
+The version is pinned in `gradle.properties` (`geckoviewVersion`). GeckoView 159 needs `compileSdk` 37, which needs
+AGP 9.1.1 and Gradle 9.3.1, so those are what the project uses; moving GeckoView forward may raise them again.
 The build keeps only `arm64-v8a` and `armeabi-v7a`.
 
 GitHub Actions (`.github/workflows/build.yml`) does both on every push and attaches the debug APK to the run
