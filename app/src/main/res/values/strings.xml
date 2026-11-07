@@ -16,4 +16,25 @@
     <string name="cd_reload">Reload</string>
     <string name="page_error_title">This page can’t be opened</string>
     <string name="page_error_hint">Check the address and your connection, then try again.</string>
+    <string name="cd_ghost_mode">Incognito mode</string>
+    <string name="cd_close_tab">Close tab</string>
+    <string name="cd_remove">Remove</string>
+    <string name="incognito">Incognito</string>
+    <string name="incognito_title">You’ve gone incognito</string>
+    <string name="incognito_hint">Pages you open here are not saved to history or pins, and these tabs are gone when the app closes.</string>
+    <string name="pinned">Pinned</string>
+    <string name="history">History</string>
+    <string name="clear">Clear</string>
+    <string name="clear_all_tabs">Clear All Tabs</string>
+    <string name="done">Done</string>
+    <string name="tabs_empty">No open tabs</string>
+    <string name="tabs_cleared">Tabs closed</string>
+    <string name="undo">Undo</string>
+    <string name="pin">Pin</string>
+    <string name="unpin">Unpin</string>
+    <string name="pin_unavailable_ghost">Pins aren’t available in incognito</string>
+    <plurals name="tabs_count">
+        <item quantity="one">%d tab</item>
+        <item quantity="other">%d tabs</item>
+    </plurals>
 </resources>

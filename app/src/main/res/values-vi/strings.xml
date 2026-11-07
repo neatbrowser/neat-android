@@ -16,4 +16,24 @@
     <string name="cd_reload">Tải lại</string>
     <string name="page_error_title">Không mở được trang này</string>
     <string name="page_error_hint">Kiểm tra địa chỉ và kết nối mạng rồi thử lại.</string>
+    <string name="cd_ghost_mode">Chế độ ẩn danh</string>
+    <string name="cd_close_tab">Đóng thẻ</string>
+    <string name="cd_remove">Xóa</string>
+    <string name="incognito">Ẩn danh</string>
+    <string name="incognito_title">Bạn đang ở chế độ ẩn danh</string>
+    <string name="incognito_hint">Các trang bạn mở ở đây không được lưu vào lịch sử hay mục ghim, và những thẻ này sẽ mất khi đóng ứng dụng.</string>
+    <string name="pinned">Đã ghim</string>
+    <string name="history">Lịch sử</string>
+    <string name="clear">Xóa</string>
+    <string name="clear_all_tabs">Xóa tất cả thẻ</string>
+    <string name="done">Xong</string>
+    <string name="tabs_empty">Chưa có thẻ nào</string>
+    <string name="tabs_cleared">Đã đóng các thẻ</string>
+    <string name="undo">Hoàn tác</string>
+    <string name="pin">Ghim</string>
+    <string name="unpin">Bỏ ghim</string>
+    <string name="pin_unavailable_ghost">Không thể ghim trong chế độ ẩn danh</string>
+    <plurals name="tabs_count">
+        <item quantity="other">%d thẻ</item>
+    </plurals>
 </resources>

@@ -20,6 +20,13 @@ object NeatColors {
     val Panel = Color(0xFF2C2D30)
     val Field = Color(0xFF4A4B4F)
 
+    // Ghost (incognito) mode: the same surfaces, darker.
+    val BarGhost = Color(0xFF0A0B0D)
+    val PanelGhost = Color(0xFF141518)
+    val FieldGhost = Color(0xFF2A2B2F)
+    val GhostTop = Color(0xFF000000)
+    val GhostBottom = Color(0xFF0E1620)
+
     val OnPanel = Color(0xFFE8EAED)
     val OnPanelMuted = Color(0xFF9AA0A6)
 }

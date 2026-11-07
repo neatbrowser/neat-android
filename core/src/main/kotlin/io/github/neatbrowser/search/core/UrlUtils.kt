@@ -23,4 +23,23 @@ object UrlUtils {
 
     fun isHttp(url: String): Boolean =
         url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+
+    /**
+     * Address used to tell "the same page" apart: no fragment, lower-case scheme and host, and no
+     * lone "/" path, so `https://A.com/` and `https://a.com#top` are one page.
+     */
+    fun normalize(url: String): String {
+        val noFragment = url.substringBefore('#')
+        val schemeEnd = noFragment.indexOf("://")
+        if (schemeEnd <= 0) return noFragment
+        val scheme = noFragment.substring(0, schemeEnd).lowercase()
+        val rest = noFragment.substring(schemeEnd + 3)
+        val authorityEnd = rest.indexOfFirst { it == '/' || it == '?' }.let { if (it < 0) rest.length else it }
+        val authority = rest.substring(0, authorityEnd)
+        val tail = rest.substring(authorityEnd)
+        val at = authority.lastIndexOf('@')
+        val hostPart = authority.substring(at + 1).lowercase()
+        val normalizedAuthority = if (at >= 0) authority.substring(0, at + 1) + hostPart else hostPart
+        return "$scheme://$normalizedAuthority${if (tail == "/") "" else tail}"
+    }
 }

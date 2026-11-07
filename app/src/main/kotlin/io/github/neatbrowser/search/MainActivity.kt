@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.neatbrowser.search.browser.BrowserController
+import io.github.neatbrowser.search.browser.Storage
 import io.github.neatbrowser.search.core.UrlUtils
 import io.github.neatbrowser.search.ui.NeatApp
 import io.github.neatbrowser.search.ui.NeatTheme
@@ -25,7 +26,7 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
-        browser = BrowserController(this)
+        browser = BrowserController(this, Storage(this))
         incomingUrl = webUrlFrom(intent)
         setContent {
             NeatTheme {

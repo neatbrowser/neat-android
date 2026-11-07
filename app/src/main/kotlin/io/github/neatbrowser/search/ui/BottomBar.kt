@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.neatbrowser.search.R
 
@@ -37,8 +39,14 @@ fun BottomBar(
     onNew: () -> Unit,
     onRight: () -> Unit,
     modifier: Modifier = Modifier,
+    ghost: Boolean = false,
 ) {
-    val background = if (mode == BarMode.Page) NeatColors.BarSolid else Color.Transparent
+    val tabsLabel = stringResource(R.string.cd_tabs)
+    val background = when {
+        mode == BarMode.Home -> Color.Transparent
+        ghost -> NeatColors.BarGhost
+        else -> NeatColors.BarSolid
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -49,7 +57,10 @@ fun BottomBar(
     ) {
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             IconButton(onClick = onTabs) {
-                TabsGlyph(color = Color.White.copy(alpha = 0.92f))
+                TabsGlyph(
+                    color = Color.White.copy(alpha = 0.92f),
+                    modifier = Modifier.semantics { contentDescription = tabsLabel },
+                )
             }
         }
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {

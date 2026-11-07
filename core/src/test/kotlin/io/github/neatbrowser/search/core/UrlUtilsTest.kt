@@ -37,4 +37,14 @@ class UrlUtilsTest {
         assertFalse(UrlUtils.isHttp("javascript:1"))
         assertFalse(UrlUtils.isHttp("intent://x"))
     }
+
+    @Test fun normalizeDropsFragmentRootSlashAndCase() {
+        assertEquals("https://a.com", UrlUtils.normalize("https://A.com/"))
+        assertEquals("https://a.com", UrlUtils.normalize("HTTPS://a.com#top"))
+        assertEquals("https://a.com/x?y=Z", UrlUtils.normalize("https://A.com/x?y=Z#f"))
+        assertEquals("https://a.com?q=1", UrlUtils.normalize("https://a.com?q=1"))
+        assertEquals("https://User:Pw@a.com/p", UrlUtils.normalize("https://User:Pw@A.com/p"))
+        assertEquals("https://a.com/x/", UrlUtils.normalize("https://a.com/x/")) // only the root slash goes
+        assertEquals("about:blank", UrlUtils.normalize("about:blank"))
+    }
 }

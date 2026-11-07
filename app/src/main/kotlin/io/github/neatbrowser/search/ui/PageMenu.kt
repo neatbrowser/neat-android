@@ -6,13 +6,19 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -24,11 +30,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.neatbrowser.search.R
 import io.github.neatbrowser.search.browser.PageState
 import io.github.neatbrowser.search.core.UrlUtils
@@ -36,8 +44,9 @@ import io.github.neatbrowser.search.core.UrlUtils
 private val PanelShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
 
 /**
- * The menu behind the up-arrow. Step 1 has only the address row (back, forward, site, copy
- * link, reload); Pin, Find, Share, Zoom, Desktop Site and Site Settings come with step 3.
+ * The menu behind the up-arrow: the address row (back, forward, site, copy link, reload) and a row
+ * of actions. Only Pin is there so far; Find, Share, Zoom, Desktop Site and Site Settings come
+ * with step 3. Pins are not available in ghost mode, so the tile is dimmed and says why.
  */
 @Composable
 fun PageMenu(
@@ -48,6 +57,10 @@ fun PageMenu(
     onForward: () -> Unit,
     onCopyLink: () -> Unit,
     onReload: () -> Unit,
+    pinned: Boolean,
+    ghost: Boolean,
+    onTogglePin: () -> Unit,
+    onPinUnavailable: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize()) {
@@ -64,11 +77,24 @@ fun PageMenu(
                 Modifier
                     .fillMaxWidth()
                     .clip(PanelShape)
-                    .background(NeatColors.Panel)
+                    .background(if (ghost) NeatColors.PanelGhost else NeatColors.Panel)
                     .navigationBarsPadding()
                     .padding(start = 14.dp, end = 14.dp, top = 18.dp, bottom = 18.dp),
             ) {
-                AddressRow(page, onBack, onForward, onCopyLink, onReload)
+                Column {
+                    AddressRow(page, ghost, onBack, onForward, onCopyLink, onReload)
+                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ActionTile(
+                            label = stringResource(if (pinned) R.string.unpin else R.string.pin),
+                            dimmed = ghost,
+                            ghost = ghost,
+                            onClick = if (ghost) onPinUnavailable else onTogglePin,
+                        ) {
+                            PinGlyph(color = if (pinned) NeatColors.Cyan else NeatColors.OnPanel, glyphSize = 26.dp)
+                        }
+                    }
+                }
             }
         }
     }
@@ -77,6 +103,7 @@ fun PageMenu(
 @Composable
 private fun AddressRow(
     page: PageState,
+    ghost: Boolean,
     onBack: () -> Unit,
     onForward: () -> Unit,
     onCopyLink: () -> Unit,
@@ -89,7 +116,7 @@ private fun AddressRow(
             .fillMaxWidth()
             .height(56.dp)
             .clip(RoundedCornerShape(32.dp))
-            .background(NeatColors.Field)
+            .background(if (ghost) NeatColors.FieldGhost else NeatColors.Field)
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -113,5 +140,37 @@ private fun AddressRow(
         IconButton(onClick = onReload) {
             Icon(Icons.Filled.Refresh, stringResource(R.string.cd_reload), tint = NeatColors.OnPanel)
         }
+    }
+}
+
+/** A square button with a glyph and a label under it. */
+@Composable
+private fun ActionTile(
+    label: String,
+    dimmed: Boolean,
+    ghost: Boolean,
+    onClick: () -> Unit,
+    glyph: @Composable () -> Unit,
+) {
+    Column(
+        Modifier
+            .width(76.dp)
+            .alpha(if (dimmed) 0.45f else 1f)
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier
+                .size(60.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(if (ghost) NeatColors.FieldGhost else NeatColors.Field),
+            contentAlignment = Alignment.Center,
+        ) {
+            glyph()
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(label, color = NeatColors.OnPanel, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

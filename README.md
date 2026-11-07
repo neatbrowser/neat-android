@@ -14,27 +14,44 @@ is part of the APK, so every release carries a current engine whatever Android v
 a bigger APK, a release at least every ~4 weeks to pick up Gecko's security fixes, and some sites made only for
 Chromium may work worse. It also gives what WebView cannot: WebExtensions for blocking, and a real private mode.
 
-## Status: step 1 of 5
+## Status: step 2 of 5
 
 | Step | What | State |
 | --- | --- | --- |
-| 1 | App skeleton, GeckoView, home screen, search panel, one page | **written, not yet built** |
-| 2 | Tab switcher, many tabs, history, Pin, ghost mode (Gecko private sessions) | planned |
+| 1 | App skeleton, GeckoView, home screen, search panel, one page | built by CI |
+| 2 | Tab switcher, many tabs, history, Pin, ghost mode (Gecko private sessions) | **written, not yet built** |
 | 3 | Page menu (Find, Share, Zoom, Desktop Site) and Site Settings | planned |
 | 4 | Blocker: pick the route (see below), list updates, debug screen of blocked requests | planned |
 | 5 | Measure blocking against NEAT for Windows on a set of pages | planned |
 
-What step 1 does:
+What steps 1 and 2 do:
 
-- Home screen: NEAT gradient and logo; bottom bar with tabs, "+" and settings (tabs and settings only show "Coming soon").
+- Home screen: NEAT gradient and logo; bottom bar with tabs, "+" and settings (settings only shows "Coming soon").
 - "+" slides up a search panel and opens the keyboard. Text that looks like an address is opened, anything else is
-  searched on Google. Only `http` and `https` can be typed in; other schemes become searches.
-- On a page the bar's right button becomes an up-arrow that opens a small menu: back, forward, site, copy link, reload.
-- Links from other apps open here (the app can be chosen as the browser).
+  searched on Google. Only `http` and `https` can be typed in; other schemes become searches. What you open always
+  goes into a **new tab**.
+- Under the box: **Pinned** pages, then **History**; typing filters both (accents and case ignored, so "doc bao"
+  finds "Đọc báo"). Every row has a button to remove it; History has "Clear". Suggestions come from the local
+  history only; nothing is sent anywhere while you type.
+- The tab button opens the **tab switcher**: a big card per tab, swipe sideways to move, swipe up (or tap ×) to
+  close, tap to go to it. "Clear All Tabs" closes them all with a few seconds to Undo. Cards show a picture of the
+  page, taken when you leave it (kept in memory only).
+- On a page the bar's right button becomes an up-arrow that opens a menu: back, forward, site, copy link, reload,
+  and **Pin** / Unpin.
+- The eyes button (in the search panel and in the tab switcher) switches **ghost mode**. Ghost tabs are Gecko
+  private sessions; they are never written to disk, never recorded in history, cannot be pinned, and the search
+  panel does not show pins or history while ghost mode is on. The window is marked secure in ghost mode: no
+  screenshots and a blank card in the recent-apps list. Ghost tabs are gone when the app is closed.
+- Open tabs, history (last 2000 pages) and pins are kept in small text files in the app's private storage
+  (`tabs.tsv`, `history.tsv`, `pins.tsv`). Reading them back accepts only `http`/`https` addresses.
+- Links from other apps open here in a normal tab (the app can be chosen as the browser).
 - Back is the system default; an open panel closes first.
-- If the page's process crashes, a fresh session reloads the same address. Load errors show a simple page.
+- If a page's process crashes, a fresh session reloads the same address. Load errors show a simple page and Reload
+  retries the address that failed. `target=_blank` links open a new tab.
 
-Not in step 1, on purpose: ghost mode, history, the blocker, full-screen video, downloads, permission prompts.
+Not yet, on purpose: Find, Share, Zoom, Desktop Site and Site Settings (step 3); the blocker (step 4);
+full-screen video, downloads, permission prompts, sign-in pop-ups that need `window.opener`; a way to go back to the
+home screen while tabs are open (it shows when no tab is open).
 
 ## Blocker routes (step 4, to be decided by measuring)
 
@@ -68,8 +85,8 @@ GitHub Actions (`.github/workflows/build.yml`) does both on every push and attac
 ## Layout
 
 ```
-core/   plain Kotlin, no Android: address-or-search decision, URL helpers, search engine (JUnit tests)
-app/    Android: Compose UI, GeckoSession controller
+core/   plain Kotlin, no Android: address-or-search decision, URL helpers, tabs, history, pins, file format (JUnit tests)
+app/    Android: Compose UI, tab/session controller, storage
 tools/  gen_icons.py: launcher icon layers and logo from NEAT's default2000.png
 ```
 
