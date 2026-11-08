@@ -1,8 +1,10 @@
 package io.github.neatbrowser.search.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -567,14 +570,29 @@ private fun TabBlock(
     onClose: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val offset = remember(tab.id) { Animatable(0f) }
     val density = LocalDensity.current
     val closeDistance = with(density) { CloseDragDistance.toPx() }
     val flyAway = with(density) { 700.dp.toPx() }
+
+    // How far the block has been dragged up (0 or negative). It is a plain state, written straight from the
+    // gesture: starting a coroutine for every finger move left queued writes that landed after the release and
+    // cancelled the animation that was meant to finish the swipe, so the card froze where it was let go.
+    var dragY by remember(tab.id) { mutableFloatStateOf(0f) }
+    var motion by remember(tab.id) { mutableStateOf<Job?>(null) }
     val dragState = rememberDraggableState { delta ->
         // Only upward drags count; the block never moves below where it started.
-        scope.launch { offset.snapTo((offset.value + delta).coerceAtMost(0f)) }
+        dragY = (dragY + delta).coerceAtMost(0f)
     }
+
+    /** Slides the block to [target] (replacing any slide in progress); [then] runs when it has arrived. */
+    fun slideTo(target: Float, durationMs: Int, easing: Easing, then: () -> Unit = {}) {
+        motion?.cancel()
+        motion = scope.launch {
+            animate(dragY, target, animationSpec = tween(durationMs, easing = easing)) { value, _ -> dragY = value }
+            then()
+        }
+    }
+
     val title = tab.title.ifBlank { UrlUtils.displayHost(tab.url) }
     val closeLabel = stringResource(R.string.cd_close_tab)
     val shape = RoundedCornerShape(CardRadius)
@@ -584,7 +602,9 @@ private fun TabBlock(
     LaunchedEffect(clearing) {
         if (clearing) {
             delay(SwitcherMath.clearDelayMs(page - pagerState.currentPage).toLong())
-            offset.animateTo(-flyAway, tween(CLEAR_SLIDE_MS, easing = FastOutLinearInEasing))
+            animate(dragY, -flyAway, animationSpec = tween(CLEAR_SLIDE_MS, easing = FastOutLinearInEasing)) { value, _ ->
+                dragY = value
+            }
         }
     }
 
@@ -601,7 +621,7 @@ private fun TabBlock(
                     val scale = 1f - NEIGHBOUR_SCALE_LOSS * distance
                     scaleX = scale
                     scaleY = scale
-                    translationY = offset.value
+                    translationY = dragY
                     // The other tabs slide in from the sides when the switcher opens, and out again when it closes.
                     translationX = (1f - open) * distance * sign(offsetPages) * slidePx
                     // After a card was closed, this one slides from the place it stood in into its new place.
@@ -613,18 +633,18 @@ private fun TabBlock(
                     }
                     alpha = (1f - NEIGHBOUR_ALPHA_LOSS * distance) *
                         open *
-                        (1f - (-offset.value / flyAway).coerceIn(0f, 1f))
+                        (1f - (-dragY / flyAway).coerceIn(0f, 1f))
                 }
                 .draggable(
                     state = dragState,
                     orientation = Orientation.Vertical,
+                    onDragStarted = { motion?.cancel() }, // a card that is still sliding back can be grabbed again
                     onDragStopped = { velocity ->
-                        if (SwitcherMath.swipeUpCloses(upDistance = -offset.value, upVelocity = -velocity, minDistance = closeDistance)) {
+                        if (SwitcherMath.swipeUpCloses(upDistance = -dragY, upVelocity = -velocity, minDistance = closeDistance)) {
                             // Let go after a short drag or a flick: the card throws itself off the top, as in Android's recents.
-                            offset.animateTo(-flyAway, tween(THROW_MS, easing = FastOutLinearInEasing))
-                            onClose()
+                            slideTo(-flyAway, THROW_MS, FastOutLinearInEasing) { onClose() }
                         } else {
-                            offset.animateTo(0f, tween(180, easing = FastOutSlowInEasing))
+                            slideTo(0f, 180, FastOutSlowInEasing)
                         }
                     },
                 ),
@@ -643,10 +663,7 @@ private fun TabBlock(
                         contentDescription = title
                         customActions = listOf(
                             CustomAccessibilityAction(closeLabel) {
-                                scope.launch {
-                                    offset.animateTo(-flyAway, tween(THROW_MS, easing = FastOutLinearInEasing))
-                                    onClose()
-                                }
+                                slideTo(-flyAway, THROW_MS, FastOutLinearInEasing) { onClose() }
                                 true
                             },
                         )
