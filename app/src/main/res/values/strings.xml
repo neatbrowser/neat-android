@@ -26,15 +26,10 @@
     <string name="history">History</string>
     <string name="clear">Clear</string>
     <string name="clear_all_tabs">Clear All Tabs</string>
-    <string name="done">Done</string>
     <string name="tabs_empty">No open tabs</string>
     <string name="tabs_cleared">Tabs closed</string>
     <string name="undo">Undo</string>
     <string name="pin">Pin</string>
     <string name="unpin">Unpin</string>
     <string name="pin_unavailable_ghost">Pins aren’t available in incognito</string>
-    <plurals name="tabs_count">
-        <item quantity="one">%d tab</item>
-        <item quantity="other">%d tabs</item>
-    </plurals>
 </resources>

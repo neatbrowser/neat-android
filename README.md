@@ -33,12 +33,28 @@ What steps 1 and 2 do:
 - Under the box: **Pinned** pages, then **History**; typing filters both (accents and case ignored, so "doc bao"
   finds "Đọc báo"). Every row has a button to remove it; History has "Clear". Suggestions come from the local
   history only; nothing is sent anywhere while you type.
-- The tab button opens the **tab switcher**: a big card per tab, swipe sideways to move, swipe up (or tap ×) to
-  close, tap to go to it. "Clear All Tabs" closes them all with a few seconds to Undo. Cards show a picture of the
-  page, taken when you leave it (kept in memory only).
+- The tab button opens the **tab switcher** (Arc Search style): the page shrinks into its card, the others slide
+  in. Every card has the shape of the page area, with the site's icon and title above it (no border, no ×).
+  Swipe sideways to move, swipe a card up to close it (TalkBack: the "Close tab" action), tap a card and it zooms
+  to fill the page. Tapping the empty space, the tabs button or Back scrolls to the tab that was open (about
+  350 ms per tab passed, at most 1 s) and zooms into it; if that tab was closed, into the one that took its
+  place, and with no tab left the screen fades out. Touches are blocked while it moves. The bottom bar is the home
+  bar over the gradient (tabs, "+", settings: "Coming soon"); "Clear All Tabs" sits right above "+" (hidden with
+  no tabs) and the Undo bar appears in the same spot. Cards show a picture of the page, taken when you leave it
+  (kept in memory only); the picture taken when the switcher opens waits at most 150 ms, then the old one (or a
+  letter badge) is used. The zoom uses pictures, never the live GeckoView; if the page is still drawing when the
+  zoom ends, the picture fades into it.
+- **Site icons**: GeckoView has no favicon callback, so the app fetches them itself (`browser/Favicons.kt`, rules
+  in `:core`: `FaviconLinks`, `FaviconPolicy`). When a page has loaded, the **home page of that site** is read
+  (first 128 KB; never the page you are on) for `<link rel="icon" | "shortcut icon" | "apple-touch-icon">`, the
+  size closest to 64 px is taken (`mask-icon` and SVG are skipped), with `/favicon.ico` as the fallback. Only the
+  site's own host is asked, http/https only, at most 3 redirects, no cookies, 5 s timeout, images up to 256 KB,
+  stored at about 64 px. No favicon service (Google, DuckDuckGo) is used, so no third party learns what you visit.
+  Normal tabs keep the icons as small PNG files in `files/favicons/` (wiped by History "Clear"); ghost tabs keep
+  theirs in memory only, apart from that cache, and drop them with the last ghost tab.
 - On a page the bar's right button becomes an up-arrow that opens a menu: back, forward, site, copy link, reload,
   and **Pin** / Unpin.
-- The eyes button (in the search panel and in the tab switcher) switches **ghost mode**. Ghost tabs are Gecko
+- The eyes button (in the search panel) switches **ghost mode**. Ghost tabs are Gecko
   private sessions; they are never written to disk, never recorded in history, cannot be pinned, and the search
   panel does not show pins or history while ghost mode is on. The window is marked secure in ghost mode: no
   screenshots and a blank card in the recent-apps list. Ghost tabs are gone when the app is closed.

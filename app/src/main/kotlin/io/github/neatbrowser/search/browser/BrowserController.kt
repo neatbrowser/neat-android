@@ -8,12 +8,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.IntSize
 import io.github.neatbrowser.search.core.ClearedTabs
 import io.github.neatbrowser.search.core.History
 import io.github.neatbrowser.search.core.Pins
 import io.github.neatbrowser.search.core.Tab
 import io.github.neatbrowser.search.core.TabsState
 import io.github.neatbrowser.search.core.UrlUtils
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
@@ -31,6 +35,12 @@ data class PageState(
     val canGoBack: Boolean = false,
     val canGoForward: Boolean = false,
 )
+
+/**
+ * A full-size picture of the page that was on screen when the tab switcher opened. The switcher zooms
+ * this one (sharp) instead of the small card picture; it is dropped as soon as the switcher is gone.
+ */
+class LiveShot(val tabId: Long, val image: ImageBitmap)
 
 /** One GeckoRuntime per process; creating a second one throws. */
 private object Engine {
@@ -59,6 +69,17 @@ class BrowserController(private val context: Context, private val storage: Stora
     private val engines = HashMap<Long, TabEngine>()
     private val pages = mutableStateMapOf<Long, PageState>()
     private val thumbs = mutableStateMapOf<Long, ImageBitmap>()
+    private var liveWanted = false
+
+    /** The site pictures; see [Favicons]. */
+    val favicons = Favicons(context)
+
+    /** Size of the page area (the GeckoView) in pixels, as last measured by the UI. Cards get its shape. */
+    var pageSize by mutableStateOf(IntSize.Zero)
+
+    /** Full-size picture of the page for the tab switcher's zoom; null when the switcher is not using one. */
+    var liveShot by mutableStateOf<LiveShot?>(null)
+        private set
 
     var tabsState by mutableStateOf(storage.loadTabs())
         private set
@@ -141,7 +162,7 @@ class BrowserController(private val context: Context, private val storage: Stora
         thumbs.remove(id)
         tabsState.selected?.let { show(it.id) }
         refreshActive()
-        if (!closed.ghost) storage.saveTabs(tabsState)
+        if (!closed.ghost) storage.saveTabs(tabsState) else dropGhostIconsIfUnused()
     }
 
     /** Removes every tab of the current mode. The sessions stay alive until [commitClear] so that [undoClear] is instant. */
@@ -173,6 +194,7 @@ class BrowserController(private val context: Context, private val storage: Stora
             pages.remove(tab.id)
             thumbs.remove(tab.id)
         }
+        if (removed.ghost) dropGhostIconsIfUnused()
     }
 
     fun setGhostMode(on: Boolean) {
@@ -221,6 +243,7 @@ class BrowserController(private val context: Context, private val storage: Stora
     fun clearHistory() {
         history = history.clear()
         storage.saveHistory(history)
+        favicons.clearDisk() // the stored site pictures are part of what the history knows
     }
 
     // ---- lifecycle ----
@@ -240,6 +263,7 @@ class BrowserController(private val context: Context, private val storage: Stora
 
     fun destroy() {
         storage.flush()
+        favicons.clearGhost()
         for (engine in engines.values) engine.close()
         engines.clear()
     }
@@ -248,26 +272,72 @@ class BrowserController(private val context: Context, private val storage: Stora
 
     /** Takes a picture of the page on screen, for the tab switcher. Does nothing when no page shows. */
     fun captureThumbnail() {
-        val v = view ?: return
-        val tab = tabsState.selected ?: return
-        val session = engines[tab.id]?.sessionOrNull ?: return
-        if (v.session !== session) return
+        capture(live = false)
+    }
+
+    /**
+     * Like [captureThumbnail], for opening the tab switcher: waits for the picture, but at most [timeoutMs].
+     * Returns true when a fresh picture arrived in time. When it did not, the caller goes on with the old
+     * picture (or none); a picture that comes in later is still kept. Also keeps a full-size copy in
+     * [liveShot] until [releaseLiveShot].
+     */
+    suspend fun captureThumbnailAndWait(timeoutMs: Long): Boolean {
+        liveWanted = true
+        return withTimeoutOrNull(timeoutMs) {
+            suspendCancellableCoroutine<Boolean> { continuation ->
+                val started = capture(live = true) { kept ->
+                    if (continuation.isActive) continuation.resume(kept)
+                }
+                if (!started && continuation.isActive) continuation.resume(false)
+            }
+        } ?: false
+    }
+
+    /** The tab switcher is gone: drop its full-size picture. */
+    fun releaseLiveShot() {
+        liveWanted = false
+        liveShot = null
+    }
+
+    /** Whether the live page of the tab can take over from its picture: shown, with a session, and done loading. */
+    fun isPageReady(id: Long): Boolean {
+        if (tabsState.selected?.id != id) return false
+        if (engines[id]?.sessionOrNull == null) return false
+        return pages[id]?.loading == false
+    }
+
+    /** Asks Gecko for a picture of the page on screen. False when nothing can be captured now. */
+    private fun capture(live: Boolean, onDone: (Boolean) -> Unit = {}): Boolean {
+        val v = view ?: return false
+        val tab = tabsState.selected ?: return false
+        val session = engines[tab.id]?.sessionOrNull ?: return false
+        if (v.session !== session) return false
         val id = tab.id
         try {
             v.capturePixels().then(
                 GeckoResult.OnValueListener<Bitmap, Void> { bitmap ->
-                    if (bitmap != null && bitmap.width > 0 && bitmap.height > 0 && engines.containsKey(id)) {
-                        val width = THUMBNAIL_WIDTH
-                        val height = (bitmap.height * width / bitmap.width.toFloat()).toInt().coerceAtLeast(1)
-                        thumbs[id] = Bitmap.createScaledBitmap(bitmap, width, height, true).asImageBitmap()
-                    }
+                    onDone(keepShot(id, bitmap, live))
                     null
                 },
-                GeckoResult.OnExceptionListener<Void> { null },
+                GeckoResult.OnExceptionListener<Void> {
+                    onDone(false)
+                    null
+                },
             )
         } catch (e: RuntimeException) {
             // the view is not ready to be captured; the old picture stays
+            return false
         }
+        return true
+    }
+
+    private fun keepShot(id: Long, bitmap: Bitmap?, live: Boolean): Boolean {
+        if (bitmap == null || bitmap.width <= 0 || bitmap.height <= 0 || !engines.containsKey(id)) return false
+        val width = THUMBNAIL_WIDTH
+        val height = (bitmap.height * width / bitmap.width.toFloat()).toInt().coerceAtLeast(1)
+        thumbs[id] = Bitmap.createScaledBitmap(bitmap, width, height, true).asImageBitmap()
+        if (live && liveWanted) liveShot = LiveShot(id, bitmap.asImageBitmap())
+        return true
     }
 
     // ---- engines ----
@@ -283,6 +353,12 @@ class BrowserController(private val context: Context, private val storage: Stora
 
     private fun closeEngine(id: Long) {
         engines.remove(id)?.close()
+    }
+
+    /** Ghost site pictures live in memory only: gone with the last ghost tab (a cleared set stays until its Undo runs out). */
+    private fun dropGhostIconsIfUnused() {
+        val ghostTabsLeft = tabsState.tabs.any { it.ghost } || cleared?.ghost == true
+        if (!ghostTabsLeft) favicons.clearGhost()
     }
 
     /** Only the selected tab of the current mode is active (drawing, running timers at full speed). */
@@ -377,8 +453,9 @@ class BrowserController(private val context: Context, private val storage: Stora
                 updatePage(id) { copy(loading = false, progress = 100) }
                 val shown = pages[id] ?: return
                 val url = shown.url
-                if (success && !ghost && errorUrl == null && url != null && UrlUtils.isHttp(url)) {
-                    recordVisit(url, shown.title)
+                if (success && errorUrl == null && url != null && UrlUtils.isHttp(url)) {
+                    if (!ghost) recordVisit(url, shown.title)
+                    favicons.fetchIfMissing(url, ghost)
                 }
             }
 

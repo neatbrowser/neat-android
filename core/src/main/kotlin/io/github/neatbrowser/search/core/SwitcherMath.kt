@@ -1,0 +1,59 @@
+package io.github.neatbrowser.search.core
+
+import kotlin.math.abs
+
+/** The numbers behind the tab switcher that need no Android: timings, where to return to, and card size. */
+object SwitcherMath {
+    /** Scrolling back to the tab that was open takes this long for every tab it has to pass. */
+    const val MS_PER_TAB = 350
+
+    /** ... but never longer than this, however many tabs there are. */
+    const val MAX_SCROLL_MS = 1000
+
+    /** The shape of a page area is kept inside this range so a freak measurement cannot make a sliver or a plank. */
+    const val MIN_ASPECT = 0.25f
+    const val MAX_ASPECT = 3f
+
+    /**
+     * Time to scroll the switcher over [tabsSkipped] tabs (either direction): [msPerTab] each, at most
+     * [capMs]. Zero tabs take no time.
+     */
+    fun scrollDurationMs(tabsSkipped: Int, msPerTab: Int = MS_PER_TAB, capMs: Int = MAX_SCROLL_MS): Int {
+        val total = abs(tabsSkipped.toLong()) * msPerTab
+        return total.coerceAtMost(capMs.toLong()).toInt()
+    }
+
+    /**
+     * The card to go back to when the switcher is left without picking one: the tab selected right
+     * now. [TabsState.close] has already moved the selection to the replacement when the tab that was
+     * open got closed, so this is also where to go then. Null means the home screen (no tabs left).
+     */
+    fun returnIndex(tabs: List<Tab>, selectedId: Long?): Int? {
+        if (selectedId == null) return null
+        return tabs.indexOfFirst { it.id == selectedId }.takeIf { it >= 0 }
+    }
+
+    /** Width over height of the page area, or null while it has not been measured. */
+    fun pageAspect(width: Int, height: Int): Float? {
+        if (width <= 0 || height <= 0) return null
+        return (width.toFloat() / height).coerceIn(MIN_ASPECT, MAX_ASPECT)
+    }
+
+    data class CardSize(val width: Float, val height: Float)
+
+    /**
+     * The biggest card with the proportions [aspect] (width over height) that fits in [maxWidth] x
+     * [maxHeight]. The card has the shape of the page, so the picture of the page needs no cropping.
+     */
+    fun fitCard(maxWidth: Float, maxHeight: Float, aspect: Float): CardSize {
+        val a = if (aspect > 0f) aspect.coerceIn(MIN_ASPECT, MAX_ASPECT) else 1f
+        var height = maxHeight.coerceAtLeast(1f)
+        var width = height * a
+        val widthLimit = maxWidth.coerceAtLeast(1f)
+        if (width > widthLimit) {
+            width = widthLimit
+            height = width / a
+        }
+        return CardSize(width, height)
+    }
+}

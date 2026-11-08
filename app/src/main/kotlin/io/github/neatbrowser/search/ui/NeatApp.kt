@@ -22,14 +22,22 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -37,6 +45,9 @@ import io.github.neatbrowser.search.R
 import io.github.neatbrowser.search.browser.BrowserController
 import io.github.neatbrowser.search.core.SearchEngine
 import org.mozilla.geckoview.GeckoView
+
+/** Opening the tab switcher waits this long for the picture of the page; after that the old picture (or a letter badge) is used. */
+private const val CAPTURE_WAIT_MS = 150L
 
 /**
  * The whole screen: the page (or the home screen) with the bottom bar, and the panels that slide
@@ -53,10 +64,19 @@ fun NeatApp(
     var searchOpen by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var switcherOpen by remember { mutableStateOf(false) }
+    var switcherBack by remember { mutableIntStateOf(0) } // counts Back presses meant for the switcher
+    var switcherBusy by remember { mutableStateOf(false) } // it is animating, or a picture still covers the page
+    var pageOrigin by remember { mutableStateOf<Offset?>(null) }
 
     val ghost = browser.ghostMode
     val page = browser.page
     val selected = browser.selectedTab
+
+    // Where the page is on screen: the switcher zooms its cards between here and their places.
+    val pageBounds = pageOrigin?.let { origin ->
+        val size = browser.pageSize
+        if (size.width > 0 && size.height > 0) Rect(origin, Size(size.width.toFloat(), size.height.toFloat())) else null
+    }
 
     fun closePanels() {
         searchOpen = false
@@ -75,125 +95,144 @@ fun NeatApp(
     // Ghost mode hides the app in the recent-apps list and blocks screenshots.
     SecureWindow(secure = ghost)
 
-    // Back closes the open panel; otherwise the system default applies.
-    BackHandler(enabled = searchOpen || menuOpen || switcherOpen) { closePanels() }
+    // Back closes the open panel; the tab switcher zooms back into the tab that was open; otherwise the system default applies.
+    BackHandler(enabled = searchOpen || menuOpen || switcherOpen || switcherBusy) {
+        when {
+            searchOpen || menuOpen -> closePanels()
+            switcherBusy -> Unit // still moving: Back waits
+            switcherOpen -> switcherBack++
+            else -> Unit
+        }
+    }
 
-    Box(Modifier.fillMaxSize().background(if (ghost) NeatColors.GhostTop else NeatColors.Navy)) {
-        if (selected != null) {
-            Column(Modifier.fillMaxSize().background(NeatColors.PageBackground)) {
-                Box(Modifier.weight(1f).fillMaxWidth().statusBarsPadding()) {
-                    AndroidView(
-                        factory = { ctx -> GeckoView(ctx).also { browser.attachView(it) } },
-                        update = { view ->
-                            // Showing another tab (or a new session after a crash) means showing another session.
-                            val session = browser.selectedSession
-                            if (session != null && view.session !== session) view.setSession(session)
-                        },
-                        onRelease = { view ->
-                            browser.detachView(view)
-                            view.releaseSession()
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    if (page.loading && page.progress < 100) {
-                        LinearProgressIndicator(
-                            progress = { page.progress / 100f },
-                            modifier = Modifier.fillMaxWidth().height(2.dp),
-                            color = NeatColors.Cyan,
-                            trackColor = Color.Transparent,
+    CompositionLocalProvider(LocalFavicons provides browser.favicons) {
+        Box(Modifier.fillMaxSize().background(if (ghost) NeatColors.GhostTop else NeatColors.Navy)) {
+            if (selected != null) {
+                Column(Modifier.fillMaxSize().background(NeatColors.PageBackground)) {
+                    Box(Modifier.weight(1f).fillMaxWidth().statusBarsPadding()) {
+                        AndroidView(
+                            factory = { ctx -> GeckoView(ctx).also { browser.attachView(it) } },
+                            update = { view ->
+                                // Showing another tab (or a new session after a crash) means showing another session.
+                                val session = browser.selectedSession
+                                if (session != null && view.session !== session) view.setSession(session)
+                            },
+                            onRelease = { view ->
+                                browser.detachView(view)
+                                view.releaseSession()
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .onSizeChanged { browser.pageSize = it } // the tab cards get this shape
+                                .onGloballyPositioned { pageOrigin = it.positionInRoot() },
                         )
+                        if (page.loading && page.progress < 100) {
+                            LinearProgressIndicator(
+                                progress = { page.progress / 100f },
+                                modifier = Modifier.fillMaxWidth().height(2.dp),
+                                color = NeatColors.Cyan,
+                                trackColor = Color.Transparent,
+                            )
+                        }
                     }
+                    BottomBar(
+                        mode = BarMode.Page,
+                        ghost = ghost,
+                        onTabs = {
+                            // The switcher takes the picture of the page itself, right before it zooms it down.
+                            closePanels()
+                            switcherOpen = true
+                        },
+                        onNew = { closePanels(); searchOpen = true },
+                        onRight = { closePanels(); menuOpen = true },
+                    )
                 }
+            } else {
+                HomeScreen(ghost = ghost)
                 BottomBar(
-                    mode = BarMode.Page,
+                    mode = BarMode.Home,
                     ghost = ghost,
-                    onTabs = {
-                        browser.captureThumbnail()
-                        closePanels()
-                        switcherOpen = true
-                    },
+                    onTabs = { closePanels(); switcherOpen = true },
                     onNew = { closePanels(); searchOpen = true },
-                    onRight = { closePanels(); menuOpen = true },
+                    onRight = { toast(context, R.string.coming_soon) },
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
-        } else {
-            HomeScreen(ghost = ghost)
-            BottomBar(
-                mode = BarMode.Home,
+
+            TabSwitcher(
+                visible = switcherOpen,
+                backSignal = switcherBack,
+                tabs = browser.visibleTabs,
+                selectedId = selected?.id,
                 ghost = ghost,
-                onTabs = { closePanels(); switcherOpen = true },
+                thumbnails = browser.thumbnails,
+                liveShot = browser.liveShot,
+                pageBounds = pageBounds,
+                pageSize = browser.pageSize,
+                isPageReady = browser::isPageReady,
+                capture = { browser.captureThumbnailAndWait(CAPTURE_WAIT_MS) },
+                onReturn = { id ->
+                    if (id != null) browser.select(id)
+                    switcherOpen = false
+                },
+                onClose = { id -> browser.closeTab(id) },
+                onClearAll = { browser.clearAll() },
                 onNew = { closePanels(); searchOpen = true },
-                onRight = { toast(context, R.string.coming_soon) },
-                modifier = Modifier.align(Alignment.BottomCenter),
+                onSettings = { toast(context, R.string.coming_soon) },
+                onHidden = { browser.releaseLiveShot() },
+                onBusyChange = { switcherBusy = it },
+            )
+
+            SearchSheet(
+                visible = searchOpen,
+                ghost = ghost,
+                engine = engine,
+                pins = browser.pins,
+                history = browser.history,
+                onToggleGhost = { browser.setGhostMode(!ghost) },
+                onDismiss = { searchOpen = false },
+                onOpen = { url ->
+                    searchOpen = false
+                    browser.openTab(url)
+                },
+                onRemovePin = browser::removePin,
+                onRemoveHistory = browser::removeFromHistory,
+                onClearHistory = browser::clearHistory,
+            )
+
+            PageMenu(
+                visible = menuOpen,
+                page = page,
+                onDismiss = { menuOpen = false },
+                onBack = { browser.goBack() },
+                onForward = { browser.goForward() },
+                onCopyLink = {
+                    page.url?.let { copyLink(context, it) }
+                    menuOpen = false
+                },
+                onReload = {
+                    browser.reload()
+                    menuOpen = false
+                },
+                pinned = browser.isPinned,
+                ghost = ghost,
+                onTogglePin = { browser.togglePin() },
+                onPinUnavailable = { toast(context, R.string.pin_unavailable_ghost) },
+            )
+
+            // Above the bottom bar, wherever the bar is. In the tab switcher this is exactly where "Clear All Tabs" was.
+            val cleared = browser.cleared
+            UndoBar(
+                visible = cleared != null && cleared.ghost == ghost,
+                token = cleared,
+                onUndo = { browser.undoClear() },
+                onExpire = { browser.commitClear() },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = ActionSlotBottom),
             )
         }
-
-        TabSwitcher(
-            visible = switcherOpen,
-            tabs = browser.visibleTabs,
-            selectedId = selected?.id,
-            ghost = ghost,
-            thumbnails = browser.thumbnails,
-            onSelect = { id ->
-                browser.select(id)
-                switcherOpen = false
-            },
-            onClose = { id -> browser.closeTab(id) },
-            onClearAll = { browser.clearAll() },
-            onNew = { closePanels(); searchOpen = true },
-            onDismiss = { switcherOpen = false },
-            onToggleGhost = { browser.setGhostMode(!ghost) },
-        )
-
-        SearchSheet(
-            visible = searchOpen,
-            ghost = ghost,
-            engine = engine,
-            pins = browser.pins,
-            history = browser.history,
-            onToggleGhost = { browser.setGhostMode(!ghost) },
-            onDismiss = { searchOpen = false },
-            onOpen = { url ->
-                searchOpen = false
-                browser.openTab(url)
-            },
-            onRemovePin = browser::removePin,
-            onRemoveHistory = browser::removeFromHistory,
-            onClearHistory = browser::clearHistory,
-        )
-
-        PageMenu(
-            visible = menuOpen,
-            page = page,
-            onDismiss = { menuOpen = false },
-            onBack = { browser.goBack() },
-            onForward = { browser.goForward() },
-            onCopyLink = {
-                page.url?.let { copyLink(context, it) }
-                menuOpen = false
-            },
-            onReload = {
-                browser.reload()
-                menuOpen = false
-            },
-            pinned = browser.isPinned,
-            ghost = ghost,
-            onTogglePin = { browser.togglePin() },
-            onPinUnavailable = { toast(context, R.string.pin_unavailable_ghost) },
-        )
-
-        // Above the bottom bar, wherever the bar is.
-        val cleared = browser.cleared
-        UndoBar(
-            visible = cleared != null && cleared.ghost == ghost,
-            token = cleared,
-            onUndo = { browser.undoClear() },
-            onExpire = { browser.commitClear() },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 88.dp),
-        )
     }
 }
 
