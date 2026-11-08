@@ -38,12 +38,13 @@ What steps 1 and 2 do:
   Swipe sideways to move, swipe a card up to close it (TalkBack: the "Close tab" action), tap a card and it zooms
   to fill the page. Tapping the empty space, the tabs button or Back scrolls to the tab that was open (about
   350 ms per tab passed, at most 1 s) and zooms into it; if that tab was closed, into the one that took its
-  place, and with no tab left the screen fades out. Touches are blocked while it moves. The bottom bar is the home
+  place, and with no tab left the screen fades out. A swipe up on the empty space does the same. Touches are blocked while it moves. The bottom bar is the home
   bar over the gradient (tabs, "+", settings: "Coming soon"); "Clear All Tabs" sits right above "+" (hidden with
   no tabs) and the Undo bar appears in the same spot. Cards show a picture of the page, taken when you leave it
   (kept in memory only); the picture taken when the switcher opens waits at most 150 ms, then the old one (or a
-  letter badge) is used. The zoom uses pictures, never the live GeckoView; if the page is still drawing when the
-  zoom ends, the picture fades into it.
+  letter badge) is used. The zoom uses pictures, never the live GeckoView, and the backdrop stays solid while it
+  zooms (the live page never shows behind the card); if the page is still drawing when the zoom ends, the picture
+  fades into it.
 - **Site icons**: GeckoView has no favicon callback, so the app fetches them itself (`browser/Favicons.kt`, rules
   in `:core`: `FaviconLinks`, `FaviconPolicy`). When a page has loaded, the **home page of that site** is read
   (first 128 KB; never the page you are on) for `<link rel="icon" | "shortcut icon" | "apple-touch-icon">`, the

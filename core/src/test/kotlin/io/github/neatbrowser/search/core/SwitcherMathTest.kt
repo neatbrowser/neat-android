@@ -1,6 +1,7 @@
 package io.github.neatbrowser.search.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -125,5 +126,58 @@ class SwitcherMathTest {
         assertTrue(bad.width > 0f && bad.height > 0f)
         val zero = SwitcherMath.fitCard(maxWidth = 100f, maxHeight = 100f, aspect = 0f)
         assertTrue(zero.width > 0f && zero.height > 0f)
+    }
+
+    // ---- backdrop while a card zooms ----
+
+    @Test fun backdropStaysSolidWhileACardZoomsUntilItIsNearThePage() {
+        assertEquals(1f, SwitcherMath.backdropAlpha(1f, zooming = true), 0.0001f)
+        assertEquals(1f, SwitcherMath.backdropAlpha(0.6f, zooming = true), 0.0001f)
+        assertEquals(1f, SwitcherMath.backdropAlpha(SwitcherMath.BACKDROP_LEAD, zooming = true), 0.0001f)
+    }
+
+    @Test fun backdropFadesOnlyOverTheLastQuarterOfTheZoom() {
+        assertEquals(0.5f, SwitcherMath.backdropAlpha(0.125f, zooming = true), 0.0001f)
+        assertEquals(0f, SwitcherMath.backdropAlpha(0f, zooming = true), 0.0001f)
+    }
+
+    @Test fun backdropFollowsTheAnimationWhenNothingZooms() {
+        assertEquals(0f, SwitcherMath.backdropAlpha(0f, zooming = false), 0.0001f)
+        assertEquals(0.4f, SwitcherMath.backdropAlpha(0.4f, zooming = false), 0.0001f)
+        assertEquals(1f, SwitcherMath.backdropAlpha(1f, zooming = false), 0.0001f)
+    }
+
+    @Test fun backdropIgnoresOvershoot() {
+        assertEquals(1f, SwitcherMath.backdropAlpha(1.2f, zooming = true), 0.0001f)
+        assertEquals(1f, SwitcherMath.backdropAlpha(1.2f, zooming = false), 0.0001f)
+        assertEquals(0f, SwitcherMath.backdropAlpha(-0.2f, zooming = true), 0.0001f)
+        assertEquals(0f, SwitcherMath.backdropAlpha(-0.2f, zooming = false), 0.0001f)
+    }
+
+    // ---- swipe up ----
+
+    @Test fun aLongSwipeUpCloses() {
+        assertTrue(SwitcherMath.swipeUpCloses(upDistance = 200f, upVelocity = 0f, minDistance = 110f))
+    }
+
+    @Test fun aShortSlowSwipeDoesNot() {
+        assertFalse(SwitcherMath.swipeUpCloses(upDistance = 60f, upVelocity = 500f, minDistance = 110f))
+        assertFalse(SwitcherMath.swipeUpCloses(upDistance = 0f, upVelocity = 0f, minDistance = 110f))
+    }
+
+    @Test fun aShortFlingCloses() {
+        assertTrue(SwitcherMath.swipeUpCloses(upDistance = 30f, upVelocity = 2500f, minDistance = 110f))
+    }
+
+    @Test fun exactlyAtTheThresholdDoesNot() {
+        assertFalse(SwitcherMath.swipeUpCloses(upDistance = 110f, upVelocity = SwitcherMath.SWIPE_VELOCITY, minDistance = 110f))
+    }
+
+    @Test fun swipingDownNeverCloses() {
+        assertFalse(SwitcherMath.swipeUpCloses(upDistance = -300f, upVelocity = -5000f, minDistance = 110f))
+    }
+
+    @Test fun theVelocityLimitCanBeTuned() {
+        assertTrue(SwitcherMath.swipeUpCloses(upDistance = 0f, upVelocity = 900f, minDistance = 110f, minVelocity = 800f))
     }
 }

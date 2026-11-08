@@ -10,6 +10,16 @@ object SwitcherMath {
     /** ... but never longer than this, however many tabs there are. */
     const val MAX_SCROLL_MS = 1000
 
+    /** A swipe up faster than this (pixels per second) counts, however short it is. */
+    const val SWIPE_VELOCITY = 1800f
+
+    /**
+     * While a card zooms, the backdrop is solid until the zoom is this close to the page (0 = the card covers
+     * the page), and only then fades. Until then the live page must not show through: it would be a second,
+     * full-size copy of the page behind the zooming card.
+     */
+    const val BACKDROP_LEAD = 0.25f
+
     /** The shape of a page area is kept inside this range so a freak measurement cannot make a sliver or a plank. */
     const val MIN_ASPECT = 0.25f
     const val MAX_ASPECT = 3f
@@ -56,4 +66,23 @@ object SwitcherMath {
         }
         return CardSize(width, height)
     }
+
+    /**
+     * Opacity of the switcher's backdrop (the gradient) at [open] (1 = fully open, 0 = the page is showing).
+     * With a card [zooming] between its place and the page the backdrop stays solid, so the live page is
+     * never visible behind the card, and fades only over the last [BACKDROP_LEAD] of the way to the page.
+     * Without a zoom (home screen, no page) it simply follows [open].
+     */
+    fun backdropAlpha(open: Float, zooming: Boolean): Float {
+        val o = open.coerceIn(0f, 1f)
+        return if (zooming) (o / BACKDROP_LEAD).coerceIn(0f, 1f) else o
+    }
+
+    /**
+     * Whether an upward swipe closes what it was dragging (a card, or the whole switcher): it went further
+     * than [minDistance], or it was flung faster than [minVelocity]. Distance and velocity are how much
+     * upward, so negative means the finger went down.
+     */
+    fun swipeUpCloses(upDistance: Float, upVelocity: Float, minDistance: Float, minVelocity: Float = SWIPE_VELOCITY): Boolean =
+        upDistance > minDistance || upVelocity > minVelocity
 }

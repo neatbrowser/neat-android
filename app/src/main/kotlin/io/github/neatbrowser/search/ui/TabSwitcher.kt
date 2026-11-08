@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -351,6 +352,12 @@ private fun SwitcherBody(
         Brush.verticalGradient(listOf(NeatColors.NavyDeep, NeatColors.Navy, NeatColors.NavyTeal))
     }
 
+    // A swipe up on the empty space leaves the switcher, like a tap there. A swipe that starts on a card belongs to
+    // the card (it closes that tab): the card takes the drag first, so this one never sees it.
+    var leaveUp by remember { mutableFloatStateOf(0f) }
+    val leaveDrag = rememberDraggableState { delta -> leaveUp -= delta }
+    val leaveDistance = with(density) { 80.dp.toPx() }
+
     BoxWithConstraints(modifier.fillMaxSize()) {
         // ---- layout, in pixels ----
         val width = constraints.maxWidth.toFloat()
@@ -376,16 +383,33 @@ private fun SwitcherBody(
         val blockTop = regionTop + (regionBottom - regionTop - blockHeight) / 2f
 
         // ---- background ----
-        if (!handoff) {
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = anim.open.value }.background(background))
-        }
-
-        // ---- cards; a tap on the empty space around them goes back to the tab that was open ----
+        // While a card zooms to or from the page the backdrop stays solid: if it faded away with the zoom, the
+        // live page would show behind the card, full size and already in place, and the zoom would look fake.
         if (!handoff) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(Unit) { detectTapGestures(onTap = { emptyTap() }) },
+                    .graphicsLayer { alpha = SwitcherMath.backdropAlpha(anim.open.value, zooming = anim.heroId != null) }
+                    .background(background),
+            )
+        }
+
+        // ---- cards; a tap or a swipe up on the empty space around them goes back to the tab that was open ----
+        if (!handoff) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures(onTap = { emptyTap() }) }
+                    .draggable(
+                        state = leaveDrag,
+                        orientation = Orientation.Vertical,
+                        enabled = anim.phase == Phase.Open,
+                        onDragStarted = { leaveUp = 0f },
+                        onDragStopped = { velocity ->
+                            if (SwitcherMath.swipeUpCloses(leaveUp, -velocity, leaveDistance)) emptyTap()
+                            leaveUp = 0f
+                        },
+                    ),
             ) {
                 if (tabs.isEmpty()) {
                     Text(
@@ -543,7 +567,7 @@ private fun TabBlock(
                     state = dragState,
                     orientation = Orientation.Vertical,
                     onDragStopped = { velocity ->
-                        if (offset.value < -closeDistance || velocity < -1800f) {
+                        if (SwitcherMath.swipeUpCloses(upDistance = -offset.value, upVelocity = -velocity, minDistance = closeDistance)) {
                             offset.animateTo(-flyAway, tween(180))
                             onClose()
                         } else {
