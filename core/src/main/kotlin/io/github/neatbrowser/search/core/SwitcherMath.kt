@@ -10,8 +10,14 @@ object SwitcherMath {
     /** ... but never longer than this, however many tabs there are. */
     const val MAX_SCROLL_MS = 1000
 
-    /** A swipe up faster than this (pixels per second) counts, however short it is. */
-    const val SWIPE_VELOCITY = 1800f
+    /** A swipe up faster than this (pixels per second) counts, however short it is: a short flick throws a card away. */
+    const val SWIPE_VELOCITY = 800f
+
+    /** "Clear All Tabs": each card starts sliding away this much later than the one before it, middle one first. */
+    const val CLEAR_STAGGER_MS = 70
+
+    /** Only the cards this many places from the middle are on screen, so they are the only ones that need a delay. */
+    const val CLEAR_MAX_PLACES = 2
 
     /**
      * While a card zooms, the backdrop is solid until the zoom is this close to the page (0 = the card covers
@@ -85,4 +91,11 @@ object SwitcherMath {
      */
     fun swipeUpCloses(upDistance: Float, upVelocity: Float, minDistance: Float, minVelocity: Float = SWIPE_VELOCITY): Boolean =
         upDistance > minDistance || upVelocity > minVelocity
+
+    /**
+     * How long a card [places] away from the middle waits before it slides away when all tabs are cleared:
+     * the middle one goes first, then the ones beside it, and so on, up to [CLEAR_MAX_PLACES] places.
+     */
+    fun clearDelayMs(places: Int, staggerMs: Int = CLEAR_STAGGER_MS): Int =
+        minOf(abs(places.toLong()), CLEAR_MAX_PLACES.toLong()).toInt() * staggerMs
 }

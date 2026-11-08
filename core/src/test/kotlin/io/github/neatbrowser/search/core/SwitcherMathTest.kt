@@ -180,4 +180,30 @@ class SwitcherMathTest {
     @Test fun theVelocityLimitCanBeTuned() {
         assertTrue(SwitcherMath.swipeUpCloses(upDistance = 0f, upVelocity = 900f, minDistance = 110f, minVelocity = 800f))
     }
+
+    // ---- clear all ----
+
+    @Test fun middleCardLeavesFirstThenTheOnesBesideIt() {
+        assertEquals(0, SwitcherMath.clearDelayMs(0))
+        assertEquals(70, SwitcherMath.clearDelayMs(1))
+        assertEquals(70, SwitcherMath.clearDelayMs(-1))
+        assertEquals(140, SwitcherMath.clearDelayMs(2))
+    }
+
+    @Test fun clearDelayStopsGrowingBeyondWhatIsOnScreen() {
+        assertEquals(140, SwitcherMath.clearDelayMs(3))
+        assertEquals(140, SwitcherMath.clearDelayMs(Int.MIN_VALUE))
+        assertEquals(140, SwitcherMath.clearDelayMs(Int.MAX_VALUE))
+    }
+
+    @Test fun clearStaggerCanBeTuned() {
+        assertEquals(100, SwitcherMath.clearDelayMs(1, staggerMs = 100))
+        assertEquals(0, SwitcherMath.clearDelayMs(0, staggerMs = 100))
+    }
+
+    @Test fun aShortFlickOfAboutTwoHundredDpPerSecondThrowsACardAway() {
+        // 800 px/s is a gentle flick on a 3x screen; slower than that needs a longer drag.
+        assertTrue(SwitcherMath.swipeUpCloses(upDistance = 20f, upVelocity = 1000f, minDistance = 190f))
+        assertFalse(SwitcherMath.swipeUpCloses(upDistance = 20f, upVelocity = 600f, minDistance = 190f))
+    }
 }

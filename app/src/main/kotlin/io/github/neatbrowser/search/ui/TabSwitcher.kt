@@ -1,6 +1,7 @@
 package io.github.neatbrowser.search.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -39,7 +40,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -111,6 +111,15 @@ private const val OPEN_MS = 320
 private const val ZOOM_MS = 300
 private const val FADE_MS = 220
 
+/** A card that is let go after being dragged up this far is thrown away; a flick (see SwitcherMath) needs far less. */
+private val CloseDragDistance = 64.dp
+private const val THROW_MS = 220 // a thrown card leaves the screen this fast
+private const val CLEAR_SLIDE_MS = 260 // every card of "Clear All Tabs" slides up this long ...
+private const val GAP_MS = 260 // the other cards close the gap of a closed card this long
+
+/** ... and the last card starts this much later than the first one, so this is how long the whole thing takes. */
+private val ClearMs = CLEAR_SLIDE_MS + SwitcherMath.clearDelayMs(SwitcherMath.CLEAR_MAX_PLACES)
+
 /** The live page may take this long, at least, to appear under the picture that has zoomed over it... */
 private const val HANDOFF_MIN_MS = 120L
 
@@ -131,6 +140,9 @@ private enum class Phase {
 
     /** The picture covers the page; the tab has been selected and the picture fades once the live page shows. */
     Handoff,
+
+    /** "Clear All Tabs": the cards slide up and away, then the tabs are closed. Touches are blocked. */
+    Clearing,
 }
 
 /** Everything that changes while the switcher animates. */
@@ -149,6 +161,16 @@ private class SwitcherAnim {
 
     /** Counts openings: each one gets a fresh pager that starts on the tab that is open. */
     var session by mutableIntStateOf(0)
+
+    /** True while "Clear All Tabs" slides the cards away. */
+    var clearing by mutableStateOf(false)
+
+    /** Where each tab stood (its index) when a card was closed last, and which one was in the middle then. */
+    var closedFrom by mutableStateOf<Map<Long, Int>>(emptyMap())
+    var closedMiddle by mutableIntStateOf(0)
+
+    /** 1 right after a card was closed, then down to 0 while the others slide from where they stood into the gap. */
+    val gap = Animatable(0f)
 
     var job: Job? = null
 }
@@ -202,6 +224,7 @@ fun TabSwitcher(
     val returnNow by rememberUpdatedState(onReturn)
     val hiddenNow by rememberUpdatedState(onHidden)
     val busyNow by rememberUpdatedState(onBusyChange)
+    val clearNow by rememberUpdatedState(onClearAll)
 
     // A new pager for every opening, so that it starts on the tab that is open now.
     val pagerState = key(anim.session) {
@@ -224,6 +247,9 @@ fun TabSwitcher(
             anim.session++
             anim.open.snapTo(0f)
             anim.heroAlpha.snapTo(1f)
+            anim.gap.snapTo(0f)
+            anim.closedFrom = emptyMap()
+            anim.clearing = false
             anim.heroId = null
             anim.phase = Phase.Opening
 
@@ -293,6 +319,30 @@ fun TabSwitcher(
 
     val closeToOpenTab by rememberUpdatedState { startClose(null) }
 
+    /** "Clear All Tabs": the cards slide up and away, the middle one first, and only then are the tabs closed. */
+    fun startClear() {
+        if (anim.phase != Phase.Open || tabsNow.isEmpty()) return
+        anim.phase = Phase.Clearing
+        anim.job = scope.launch {
+            anim.clearing = true
+            delay(ClearMs.toLong())
+            clearNow() // the tabs are gone now; the Undo bar takes the place of the button
+            anim.clearing = false
+            anim.phase = Phase.Open
+        }
+    }
+
+    /** A card has been thrown away: tell the others where they stood, so that they slide into the gap instead of jumping. */
+    val closeCard: (Long) -> Unit = { id ->
+        anim.closedFrom = tabs.mapIndexed { index, tab -> tab.id to index }.toMap()
+        anim.closedMiddle = pagerState.currentPage
+        onClose(id)
+        scope.launch {
+            anim.gap.snapTo(1f)
+            anim.gap.animateTo(0f, tween(GAP_MS, easing = FastOutSlowInEasing))
+        }
+    }
+
     val lastBack = remember { mutableIntStateOf(backSignal) }
     LaunchedEffect(backSignal) {
         if (backSignal != lastBack.intValue) {
@@ -313,8 +363,8 @@ fun TabSwitcher(
             pageSize = pageSize,
             onCardClick = { id -> startClose(id) },
             onEmptyTap = { closeToOpenTab() },
-            onClose = onClose,
-            onClearAll = onClearAll,
+            onClose = closeCard,
+            onClearAll = { startClear() },
             onNew = onNew,
             onSettings = onSettings,
             modifier = modifier,
@@ -344,19 +394,13 @@ private fun SwitcherBody(
     val direction = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f
     val emptyTap by rememberUpdatedState(onEmptyTap)
     val handoff = anim.phase == Phase.Handoff
-    val blocking = anim.phase == Phase.Opening || anim.phase == Phase.Closing
+    val blocking = anim.phase == Phase.Opening || anim.phase == Phase.Closing || anim.phase == Phase.Clearing
 
     val background = if (ghost) {
         Brush.verticalGradient(listOf(NeatColors.GhostTop, NeatColors.GhostBottom))
     } else {
         Brush.verticalGradient(listOf(NeatColors.NavyDeep, NeatColors.Navy, NeatColors.NavyTeal))
     }
-
-    // A swipe up on the empty space leaves the switcher, like a tap there. A swipe that starts on a card belongs to
-    // the card (it closes that tab): the card takes the drag first, so this one never sees it.
-    var leaveUp by remember { mutableFloatStateOf(0f) }
-    val leaveDrag = rememberDraggableState { delta -> leaveUp -= delta }
-    val leaveDistance = with(density) { 80.dp.toPx() }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         // ---- layout, in pixels ----
@@ -394,22 +438,12 @@ private fun SwitcherBody(
             )
         }
 
-        // ---- cards; a tap or a swipe up on the empty space around them goes back to the tab that was open ----
+        // ---- cards; a tap on the empty space around them goes back to the tab that was open ----
         if (!handoff) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(Unit) { detectTapGestures(onTap = { emptyTap() }) }
-                    .draggable(
-                        state = leaveDrag,
-                        orientation = Orientation.Vertical,
-                        enabled = anim.phase == Phase.Open,
-                        onDragStarted = { leaveUp = 0f },
-                        onDragStopped = { velocity ->
-                            if (SwitcherMath.swipeUpCloses(leaveUp, -velocity, leaveDistance)) emptyTap()
-                            leaveUp = 0f
-                        },
-                    ),
+                    .pointerInput(Unit) { detectTapGestures(onTap = { emptyTap() }) },
             ) {
                 if (tabs.isEmpty()) {
                     Text(
@@ -438,6 +472,7 @@ private fun SwitcherBody(
                             cardHeight = with(density) { card.height.toDp() },
                             blockTop = with(density) { blockTop.toDp() },
                             slidePx = card.width * SLIDE_FRACTION * direction,
+                            slotPx = (card.width + spacingPx) * direction,
                             onClick = { onCardClick(tab.id) },
                             onClose = { onClose(tab.id) },
                         )
@@ -527,13 +562,14 @@ private fun TabBlock(
     cardHeight: Dp,
     blockTop: Dp,
     slidePx: Float,
+    slotPx: Float,
     onClick: () -> Unit,
     onClose: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val offset = remember(tab.id) { Animatable(0f) }
     val density = LocalDensity.current
-    val closeDistance = with(density) { 110.dp.toPx() }
+    val closeDistance = with(density) { CloseDragDistance.toPx() }
     val flyAway = with(density) { 700.dp.toPx() }
     val dragState = rememberDraggableState { delta ->
         // Only upward drags count; the block never moves below where it started.
@@ -542,6 +578,15 @@ private fun TabBlock(
     val title = tab.title.ifBlank { UrlUtils.displayHost(tab.url) }
     val closeLabel = stringResource(R.string.cd_close_tab)
     val shape = RoundedCornerShape(CardRadius)
+
+    // "Clear All Tabs": slide off the top, the middle card first and the ones beside it a moment later.
+    val clearing = anim.clearing
+    LaunchedEffect(clearing) {
+        if (clearing) {
+            delay(SwitcherMath.clearDelayMs(page - pagerState.currentPage).toLong())
+            offset.animateTo(-flyAway, tween(CLEAR_SLIDE_MS, easing = FastOutLinearInEasing))
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -559,6 +604,13 @@ private fun TabBlock(
                     translationY = offset.value
                     // The other tabs slide in from the sides when the switcher opens, and out again when it closes.
                     translationX = (1f - open) * distance * sign(offsetPages) * slidePx
+                    // After a card was closed, this one slides from the place it stood in into its new place.
+                    val stoodAt = anim.closedFrom[tab.id]
+                    if (stoodAt != null) {
+                        val before = stoodAt - anim.closedMiddle
+                        val now = page - pagerState.currentPage
+                        translationX += anim.gap.value * (before - now) * slotPx
+                    }
                     alpha = (1f - NEIGHBOUR_ALPHA_LOSS * distance) *
                         open *
                         (1f - (-offset.value / flyAway).coerceIn(0f, 1f))
@@ -568,10 +620,11 @@ private fun TabBlock(
                     orientation = Orientation.Vertical,
                     onDragStopped = { velocity ->
                         if (SwitcherMath.swipeUpCloses(upDistance = -offset.value, upVelocity = -velocity, minDistance = closeDistance)) {
-                            offset.animateTo(-flyAway, tween(180))
+                            // Let go after a short drag or a flick: the card throws itself off the top, as in Android's recents.
+                            offset.animateTo(-flyAway, tween(THROW_MS, easing = FastOutLinearInEasing))
                             onClose()
                         } else {
-                            offset.animateTo(0f, tween(160))
+                            offset.animateTo(0f, tween(180, easing = FastOutSlowInEasing))
                         }
                     },
                 ),
@@ -591,7 +644,7 @@ private fun TabBlock(
                         customActions = listOf(
                             CustomAccessibilityAction(closeLabel) {
                                 scope.launch {
-                                    offset.animateTo(-flyAway, tween(180))
+                                    offset.animateTo(-flyAway, tween(THROW_MS, easing = FastOutLinearInEasing))
                                     onClose()
                                 }
                                 true

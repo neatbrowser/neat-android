@@ -35,12 +35,14 @@ What steps 1 and 2 do:
   history only; nothing is sent anywhere while you type.
 - The tab button opens the **tab switcher** (Arc Search style): the page shrinks into its card, the others slide
   in. Every card has the shape of the page area, with the site's icon and title above it (no border, no ×).
-  Swipe sideways to move, swipe a card up to close it (TalkBack: the "Close tab" action), tap a card and it zooms
-  to fill the page. Tapping the empty space, the tabs button or Back scrolls to the tab that was open (about
+  Swipe sideways to move. Drag a card up a short way (or flick it) and let go: it throws itself off the top and
+  the tab is closed, the other cards slide into the gap (TalkBack: the "Close tab" action). Tap a card and it
+  zooms to fill the page. Tapping the empty space, the tabs button or Back scrolls to the tab that was open (about
   350 ms per tab passed, at most 1 s) and zooms into it; if that tab was closed, into the one that took its
-  place, and with no tab left the screen fades out. A swipe up on the empty space does the same. Touches are blocked while it moves. The bottom bar is the home
+  place, and with no tab left the screen fades out. Touches are blocked while it moves. The bottom bar is the home
   bar over the gradient (tabs, "+", settings: "Coming soon"); "Clear All Tabs" sits right above "+" (hidden with
-  no tabs) and the Undo bar appears in the same spot. Cards show a picture of the page, taken when you leave it
+  no tabs): the cards slide off the top, the middle one first, then the tabs are closed and the Undo bar appears in
+  the same spot. Cards show a picture of the page, taken when you leave it
   (kept in memory only); the picture taken when the switcher opens waits at most 150 ms, then the old one (or a
   letter badge) is used. The zoom uses pictures, never the live GeckoView, and the backdrop stays solid while it
   zooms (the live page never shows behind the card); if the page is still drawing when the zoom ends, the picture
